@@ -1,9 +1,43 @@
 use std::env;
+use std::path::Path;
 
 fn main() {
-    // TODO: find out if liblsl already present on system and usable (if so, link to that instead)
-    // println!("cargo:warning={}", "rebuilding...");
+    // Check for system liblsl
+    if link_to_system_liblsl() {
+        return;
+    }
+
+    println!("cargo:warning={}", "rebuilding...");
     build_liblsl();
+}
+
+// Try to link to a system-installed dynamic liblsl
+fn link_to_system_liblsl() -> bool {
+    // If lsl path set with environment variable
+    if let Ok(lib_path) = env::var("LIBLSL_LIB_DIR") {
+        println!("cargo:rustc-link-search=native={}", lib_path);
+        println!("cargo:rustc-link-lib=dylib=lsl");
+        println!("liblsl at {}", lib_path);
+        return true;
+    }
+
+    // Check homebrew path on macOS
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(homebrew) = env::var("HOMEBREW_PREFIX") {
+            let path = &format!("{}/lib", homebrew);
+            let lib_file = Path::new(path).join("liblsl.dylib");
+            if lib_file.exists() {
+                println!("cargo:rustc-link-search=native={}", path);
+                println!("cargo:rustc-link-lib=dylib=lsl");
+                println!("liblsl at {}", lib_file.display());
+                return true;
+            }
+        }
+    }
+    // TODO: automatic finding for Linux and Windows
+    // Fallback to building from source
+    false
 }
 
 // Build the liblsl library from source using cmake
